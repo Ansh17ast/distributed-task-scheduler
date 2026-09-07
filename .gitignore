@@ -1,0 +1,41 @@
+# Binaries and build outputs
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test, coverage, and profiling artifacts
+*.out
+*.test
+*.prof
+*.pprof
+profiles/
+coverage/
+
+# Persistent data and raft directories
+data/
+*.bolt
+*.db
+
+# Logs and runtime scratch files
+*.log
+scratch/
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.cert
+
+# IDE and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

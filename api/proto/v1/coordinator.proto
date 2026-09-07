@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package scheduler.v1;
+
+option go_package = "distributed-scheduler/api/proto/v1;schedulerv1";
+
+import "google/protobuf/timestamp.proto";
+
+// TaskState enumerates all valid states in the task lifecycle.
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  TASK_STATE_PENDING     = 1;
+  TASK_STATE_BLOCKED     = 2;
+  TASK_STATE_READY       = 3;
+  TASK_STATE_LEASED      = 4;
+  TASK_STATE_RUNNING     = 5;
+  TASK_STATE_SUCCEEDED   = 6;
+  TASK_STATE_FAILED      = 7;
+  TASK_STATE_RETRY_WAIT  = 8;
+  TASK_STATE_CANCELLED   = 9;
+  TASK_STATE_LOST        = 10;
+  TASK_STATE_RECOVERING  = 11;
+}
+
+// CoordinatorService provides client-facing RPCs for task/DAG submission and inspection.
+service CoordinatorService {
+  // SubmitTask submits a single task for execution.
+  rpc SubmitTask(SubmitTaskRequest) returns (SubmitTaskResponse);
+
+  // SubmitDAG submits a directed acyclic graph workflow of tasks.
+  rpc SubmitDAG(SubmitDAGRequest) returns (SubmitDAGResponse);
+
+  // GetTask queries the current state and result of a task.
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+
+  // GetDAG queries the status of a DAG workflow.
+  rpc GetDAG(GetDAGRequest) returns (GetDAGResponse);
+
+  // CancelTask cancels an active or pending task.
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+
+  // GetClusterHealth returns coordinator status and Raft leadership information.
+  rpc GetClusterHealth(GetClusterHealthRequest) returns (GetClusterHealthResponse);
+}
+
+message TaskSpec {
+  string id = 1;
+  string tenant_id = 2;
+  int32 priority = 3;
+  int32 max_retries = 4;
+  int64 timeout_seconds = 5;
+  string payload_type = 6;
+  bytes payload = 7;
+  string idempotency_key = 8;
+  repeated string dependencies = 9;
+}
+
+message SubmitTaskRequest {
+  TaskSpec task = 1;
+}
+
+message SubmitTaskResponse {
+  string task_id = 1;
+  TaskState state = 2;
+  google.protobuf.Timestamp submitted_at = 3;
+}
+
+message SubmitDAGRequest {
+  string dag_id = 1;
+  string tenant_id = 2;
+  repeated TaskSpec tasks = 3;
+}
+
+message SubmitDAGResponse {
+  string dag_id = 1;
+  int32 task_count = 2;
+  google.protobuf.Timestamp submitted_at = 3;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message GetTaskResponse {
+  string task_id = 1;
+  string dag_id = 2;
+  string tenant_id = 3;
+  TaskState state = 4;
+  int32 priority = 5;
+  int32 attempt_count = 6;
+  int32 max_retries = 7;
+  string assigned_worker_id = 8;
+  uint64 lease_epoch = 9;
+  bytes result = 10;
+  string error_message = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp started_at = 13;
+  google.protobuf.Timestamp completed_at = 14;
+}
+
+message GetDAGRequest {
+  string dag_id = 1;
+}
+
+message GetDAGResponse {
+  string dag_id = 1;
+  string tenant_id = 2;
+  int32 total_tasks = 3;
+  int32 pending_tasks = 4;
+  int32 running_tasks = 5;
+  int32 succeeded_tasks = 6;
+  int32 failed_tasks = 7;
+  repeated GetTaskResponse tasks = 8;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+  string reason = 2;
+}
+
+message CancelTaskResponse {
+  string task_id = 1;
+  TaskState previous_state = 2;
+  TaskState current_state = 3;
+}
+
+message GetClusterHealthRequest {}
+
+message GetClusterHealthResponse {
+  string node_id = 1;
+  bool is_leader = 2;
+  string leader_id = 3;
+  string leader_address = 4;
+  uint64 current_term = 5;
+  uint64 commit_index = 6;
+  int32 active_workers = 7;
+  int32 queued_tasks = 8;
+}

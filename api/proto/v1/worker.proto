@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package scheduler.v1;
+
+option go_package = "distributed-scheduler/api/proto/v1;schedulerv1";
+
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// DESIGN NOTE / ARCHITECTURAL ROADMAP:
+// The RPCs below represent provisional Phase 2 foundation contracts used for
+// isolated unit verification of message payloads.
+//
+// IN PHASE 4:
+// Worker coordination will be consolidated into a persistent, bi-directional
+// gRPC streaming protocol:
+//
+//   rpc Coordinate(stream WorkerEvent) returns (stream CoordinatorEvent);
+//
+// Conceptual bidirectional stream messages:
+//   Worker -> Coordinator:
+//     - RegisterWorker
+//     - WorkRequest (Pull)
+//     - Heartbeat
+//     - TaskStarted (AckRunning)
+//     - TaskCompleted
+//     - TaskFailed
+//   Coordinator -> Worker:
+//     - RegistrationAck
+//     - TaskAssignment (Lease grant + LeaseEpoch)
+//     - HeartbeatAck (with revoked leases)
+//     - LeaseRevocation (Preemption signal)
+//
+// During Phases 2 & 3, the discrete unary RPCs defined below serve as the
+// strongly-typed foundation contracts.
+// ============================================================================
+
+// WorkerService defines RPCs invoked by worker daemons to interact with the coordinator.
+service WorkerService {
+  // RegisterWorker registers a new or restarting worker daemon with the coordinator leader.
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+
+  // Heartbeat periodically reports worker liveness and renews active task leases.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // PullTask is invoked by a worker when it has available execution slots (Worker-Pull model).
+  rpc PullTask(PullTaskRequest) returns (PullTaskResponse);
+
+  // AckTaskRunning is sent by a worker immediately when task execution begins.
+  rpc AckTaskRunning(AckTaskRunningRequest) returns (AckTaskRunningResponse);
+
+  // ReportTaskCompleted reports successful task completion with execution output.
+  rpc ReportTaskCompleted(ReportTaskCompletedRequest) returns (ReportTaskCompletedResponse);
+
+  // ReportTaskFailed reports a failed task execution with error details.
+  rpc ReportTaskFailed(ReportTaskFailedRequest) returns (ReportTaskFailedResponse);
+}
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  string address = 2;
+  int32 max_slots = 3;
+  map<string, string> metadata = 4;
+  string session_id = 5;
+}
+
+message RegisterWorkerResponse {
+  bool accepted = 1;
+  string leader_id = 2;
+  int64 heartbeat_interval_ms = 3;
+  int64 lease_duration_ms = 4;
+}
+
+message ActiveLeaseHeartbeat {
+  string task_id = 1;
+  uint64 lease_epoch = 2;
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  int32 available_slots = 2;
+  repeated ActiveLeaseHeartbeat active_leases = 3;
+  google.protobuf.Timestamp client_timestamp = 4;
+  string session_id = 5;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+  repeated string revoked_task_ids = 2; // Tasks whose leases expired or were reclaimed
+}
+
+message PullTaskRequest {
+  string worker_id = 1;
+  int32 available_slots = 2;
+  string session_id = 3;
+}
+
+message TaskAssignment {
+  string task_id = 1;
+  string dag_id = 2;
+  string tenant_id = 3;
+  int32 priority = 4;
+  uint64 lease_epoch = 5;
+  int64 lease_duration_ms = 6;
+  int64 execution_timeout_ms = 7;
+  string payload_type = 8;
+  bytes payload = 9;
+  string session_id = 10;
+}
+
+message PullTaskResponse {
+  bool has_task = 1;
+  TaskAssignment assignment = 2;
+}
+
+message AckTaskRunningRequest {
+  string worker_id = 1;
+  string task_id = 2;
+  uint64 lease_epoch = 3;
+  google.protobuf.Timestamp started_at = 4;
+  string session_id = 5;
+}
+
+message AckTaskRunningResponse {
+  bool acknowledged = 1;
+  string error_message = 2;
+}
+
+message ReportTaskCompletedRequest {
+  string worker_id = 1;
+  string task_id = 2;
+  uint64 lease_epoch = 3;
+  bytes result = 4;
+  google.protobuf.Timestamp completed_at = 5;
+  string session_id = 6;
+}
+
+message ReportTaskCompletedResponse {
+  bool acknowledged = 1;
+  string error_message = 2;
+}
+
+message ReportTaskFailedRequest {
+  string worker_id = 1;
+  string task_id = 2;
+  uint64 lease_epoch = 3;
+  string error_message = 4;
+  bool retryable = 5;
+  google.protobuf.Timestamp failed_at = 6;
+  string session_id = 7;
+}
+
+message ReportTaskFailedResponse {
+  bool acknowledged = 1;
+  bool will_retry = 2;
+  int32 remaining_retries = 3;
+  string error_message = 4;
+}
+
