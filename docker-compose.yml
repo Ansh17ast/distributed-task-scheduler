@@ -1,0 +1,37 @@
+services:
+  coordinator-1:
+    build: .
+    command: ["/usr/local/bin/coordinator", "-node-id=coord-1", "-grpc-port=9001", "-http-port=8001", "-raft-bind=0.0.0.0:7001"]
+    ports:
+      - "9001:9001"
+      - "8001:8001"
+      - "7001:7001"
+    restart: on-failure
+
+  coordinator-2:
+    build: .
+    command: ["/usr/local/bin/coordinator", "-node-id=coord-2", "-grpc-port=9002", "-http-port=8002", "-raft-bind=0.0.0.0:7002"]
+    ports:
+      - "9002:9002"
+      - "8002:8002"
+      - "7002:7002"
+    restart: on-failure
+
+  coordinator-3:
+    build: .
+    command: ["/usr/local/bin/coordinator", "-node-id=coord-3", "-grpc-port=9003", "-http-port=8003", "-raft-bind=0.0.0.0:7003"]
+    ports:
+      - "9003:9003"
+      - "8003:8003"
+      - "7003:7003"
+    restart: on-failure
+
+  worker-1:
+    build: .
+    entrypoint: ["/usr/local/bin/worker"]
+    command: ["-worker-id=worker-1", "-coordinator=coordinator-1:9001", "-slots=4", "-http-port=8011"]
+    depends_on:
+      - coordinator-1
+    ports:
+      - "8011:8011"
+    restart: on-failure

@@ -1,8 +1,23 @@
 # Distributed Fault-Tolerant Task Scheduler
 
+[![CI](https://github.com/Ansh17ast/distributed-task-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/Ansh17ast/distributed-task-scheduler/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go)](go.mod)
+
 A high-performance, fault-tolerant distributed task scheduler built from scratch in Go. Designed around a replicated 3-node HashiCorp Raft consensus core, a worker-pull scheduling loop, lease-based task execution, dual-token zombie worker fencing, and multi-tenant fairness.
 
 Tested under adversarial chaos engineering (process kills, network partitions, split-brain isolation, asymmetric network blackholes) and validated under real workloads up to **10,000 tasks** with complete production observability (Prometheus, OpenTelemetry, structured JSON logging).
+
+---
+
+## ⚡ Why This Project Matters (Recruiter 60-Second Summary)
+
+- **The Problem It Solves:** Centralized task schedulers and naive database-backed queues suffer from single points of failure, silent split-brain executions during network partitions, and zombie workers that resume processing after lease expiration, causing duplicate side effects.
+- **Why Raft Consensus?** Eliminates single coordinator failure. State transitions are committed only after quorum acknowledgement ($Q=2$ across 3 nodes) to persistent BoltDB write-ahead logs, ensuring state machine linearizability.
+- **Worker-Pull Over Master-Push:** Workers pull tasks strictly according to local capacity (`available_slots > 0`), eliminating head-of-line blocking and worker memory exhaustion.
+- **Clock-Independent Leases & Dual-Token Fencing:** Avoids distributed wall-clock synchronization risks by tracking heartbeats monotonically. Zombie workers are strictly fenced via unique incarnation `SessionID` and monotonically increasing `LeaseEpoch` tokens.
+- **DAG Workflow Orchestration:** Evaluates topological dependencies (e.g. Diamond DAGs) with cycle validation, automatically promoting downstream tasks as dependencies succeed.
+- **Verified Empirical Benchmarks:** Validated under real test runs: **514 µs p95 Raft quorum commit**, **135.8 ms leader failover**, and **1,152 tasks/sec sustained execution** across 10,000 tasks with zero goroutine leaks.
 
 ---
 
@@ -186,6 +201,15 @@ go test -v -run TestE2EPipelineLatencyBreakdown ./tests/benchmarks
 
 # Run the 10,000-Task Load Test suite
 go test -v -timeout 120s ./tests/load
+```
+
+### Running with Docker Compose
+```bash
+# Launch a 3-node coordinator cluster + worker
+docker compose up --build -d
+
+# Inspect health status of Coordinator 1
+curl http://localhost:8001/healthz
 ```
 
 ### Running Live Demos
